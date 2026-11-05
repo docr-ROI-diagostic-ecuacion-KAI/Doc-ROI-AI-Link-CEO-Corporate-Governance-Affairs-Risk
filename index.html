@@ -2444,13 +2444,13 @@ function specialistManifest(){return CONTRACT_EXPECTED.map(([contract,recipient,
 });}
 function productivitySnapshot(){const iq=state.upstreamCEO02?.qualityCommitments?.iq||null;
  const specialist=(state.upstreamSpecialistContracts||[]).find(x=>x.contract==='IQObjectives');
- return {kind:'DocROI.CEO03.ProductivityEvidence',source:'CEO-02 QUALITY · IQ and CHRO IQObjectives specialist contract',status:iq?.status||'PENDING',kpi:iq?.kpi||'UNKNOWN',baseline:iq?.baseline||'UNKNOWN',target:iq?.target||'UNKNOWN',measurementPeriod:iq?.period||'UNKNOWN',measurementMethod:iq?.method||'UNKNOWN',evidence:iq?.evidence||'PENDING',qualityObjective:iq?.goal||'UNKNOWN',specialistContractReceived:Boolean(specialist),recipient:'CHRO · IQObjectives (specialist); Strategy Research receives constraints',productivitySavingsEUR:'UNKNOWN',KAI_productivity_P_i:'UNKNOWN_NOT_COMPUTED',WACC_discountFromProductivity:'NOT_ASSUMED',approval:'LOCAL_DRAFT_NOT_APPROVED'};
+ return {kind:'DocROI.CEO03.ProductivityEvidence',source:'CEO-02 QUALITY · IQ (primary Intake); CHRO IQObjectives contract only when provided',status:iq?.status||'PENDING',kpi:iq?.kpi||'UNKNOWN',baseline:iq?.baseline||'UNKNOWN',target:iq?.target||'UNKNOWN',measurementPeriod:iq?.period||'UNKNOWN',measurementMethod:iq?.method||'UNKNOWN',evidence:iq?.evidence||'PENDING',qualityObjective:iq?.goal||'UNKNOWN',specialistContractReceived:Boolean(specialist),recipient:'CHRO · IQObjectives (specialist); Strategy Research receives constraints',productivitySavingsEUR:'UNKNOWN',KAI_productivity_P_i:'UNKNOWN_NOT_COMPUTED',WACC_discountFromProductivity:'NOT_ASSUMED',approval:'LOCAL_DRAFT_NOT_APPROVED'};
 }
 function contractsPanel(){const manifest=specialistManifest();const present=manifest.filter(x=>x.received).length;
  return `<div class="ar-section-label">CEO-02 specialist data contracts · structured evidence</div>
- <div class="ar-contract-strap"><b>${present} / ${manifest.length} received</b><span>Six original source contracts, preserved without relabelling, fabricating approval or changing recipients.</span></div>
+ <div class="ar-contract-strap"><b>${present} / ${manifest.length} received</b><span>Additional specialist contracts are recorded only when supplied. The CEO-02 Affairs &amp; Risk Intake is valid on its own; missing optional contracts remain PENDING.</span></div>
  <div class="ar-contract-grid">${manifest.map(x=>`<div class="ar-contract-card"><span class="ar-contract-status ${x.received?'received':''}">${x.received?'RECEIVED · DRAFT':'PENDING'}</span><strong>${h(x.contract)}</strong><small>${h(x.purpose)}</small><p><b>Producer:</b> ${h(x.sourceProducer)}<br><b>Recipient:</b> ${h(x.originalRecipient)}</p><p class="ar-mini"><b>Approval:</b> ${h(x.approval)}</p></div>`).join('')}</div>
- ${present?`<div class="ar-top-actions"><button type="button" class="ar-button ar-outline" data-action="exportSpecialists">Download six source contracts JSON</button></div>`:'<p class="ar-mini">Import the CEO-02 full transfer package or the six-contracts JSON file. A missing contract remains PENDING, never invented.</p>'}`;
+ ${present?`<div class="ar-top-actions"><button type="button" class="ar-button ar-outline" data-action="exportSpecialists">Download six source contracts JSON</button></div>`:'<p class="ar-mini">The original CEO-02 Affairs &amp; Risk Intake has been accepted independently. Specialist contracts were not provided; their evidence remains PENDING, never invented.</p>'}`;
 }
 function productivityPanel(context){const p=productivitySnapshot();const present=state.upstreamCEO02?.qualityCommitments?.iq;
  return `<div class="ar-section-label">QUALITY · productivity and IQ evidence</div><div class="ar-productivity-card">
@@ -2473,13 +2473,23 @@ function intakeReadiness(){
  const a=Boolean(state.sourceFiles?.ceo01 && state.upstreamCEO01?.business_context);
  const b=Boolean(state.sourceFiles?.ceo02 && (state.upstreamCEO02?.originalPrimarySource || (state.metadata.demo && state.upstreamCEO02?.valuesActions?.length)));
  const expected=CONTRACT_EXPECTED.map(v=>v[0]);
- const six=expected.every(n=>(state.upstreamSpecialistContracts||[]).some(c=>c.contract===n));
+ const missingSpecialists=expected.filter(n=>!(state.upstreamSpecialistContracts||[]).some(c=>c.contract===n));
+ const six=missingSpecialists.length===0;
  const projectA=(state.upstreamCEO01?.business_context?.project_name||'').trim().toLowerCase();
  const projectB=(state.upstreamCEO02?.businessContext?.project_name||'').trim().toLowerCase();
  const mismatch=Boolean(a&&b&&projectA&&projectB&&projectA!==projectB);
- const pending=[];if(!a)pending.push('CEO-01 BusinessContext JSON');if(!b)pending.push('CEO-02 Complete Transfer Package JSON');
- if(b&&!six)pending.push('six CEO-02 specialist contracts');if(mismatch)pending.push('PROJECT IDENTITY MISMATCH');
- return {ceo01Received:a,ceo02Received:b,sixContractsReceived:six,sourceProjectMatch:!mismatch,demoSelfContained:state.metadata.demo&&a&&b&&six,completeForDraftHandover:a&&b&&six&&!mismatch&&!state.metadata.demo,pending,approval:'NOT_APPROVED',sourceMode:state.metadata.demo?'EDUCATIONAL_EXAMPLE_NOT_REAL_FILE_IMPORT':'USER_DRAFT'};
+ const pending=[];
+ if(!a)pending.push('CEO-01 BusinessContext JSON');
+ if(!b)pending.push('CEO-02 Affairs & Risk Intake JSON');
+ if(mismatch)pending.push('PROJECT IDENTITY MISMATCH');
+ const mode=state.sourceFiles?.ceo02?.transferMode||(b?'INTAKE_DIRECT':'MISSING');
+ return {ceo01Received:a,ceo02Received:b,sixContractsReceived:six,
+  specialistContractsStatus:six?'ALL_SIX_RECEIVED':(missingSpecialists.length===6?'NOT_SUPPLIED_OPTIONAL':'PARTIALLY_SUPPLIED_OPTIONAL'),
+  optionalSpecialistContractsMissing:missingSpecialists,
+  sourceProjectMatch:!mismatch,demoSelfContained:Boolean(state.metadata.demo&&a&&b&&six),
+  completeForDraftHandover:Boolean(a&&b&&!mismatch&&!state.metadata.demo),
+  completeWithSpecialistContracts:Boolean(a&&b&&six&&!mismatch&&!state.metadata.demo),
+  pending,approval:'NOT_APPROVED',sourceMode:state.metadata.demo?'EDUCATIONAL_EXAMPLE_NOT_REAL_FILE_IMPORT':mode};
 }
 
 function buildResearchDataContract(){const p=handover(),prod=productivitySnapshot(),readiness=intakeReadiness();return {
@@ -2487,18 +2497,18 @@ function buildResearchDataContract(){const p=handover(),prod=productivitySnapsho
  documentStatus:'LOCAL_DRAFT_NOT_APPROVED_NOT_DELIVERED',producer:'CEO-03 · Affairs & Risk',recipient:'CEO-04 · Strategy Research',deliveryPriority:'IMMEDIATE_NEXT_STEP',
  originAndReadiness:{...readiness,sourceFiles:deepcopy(state.sourceFiles||{}),preserveUnknownAsUnknown:true,organizationalRoleNormalization:'Source role labels harmonized to CPIO; verify source-side exporter'},
  sipoc:{supplier:['CEO-01 · PMO Business Identification','CEO-02 · Reputational Commitment','CEO-03 · Affairs & Risk'],
- inputs:['Complete CEO-01 BusinessContext','Complete CEO-02 intake with VALUES, QUALITY, ODS and six specialist contracts','Risk register TAX / INSURANCE / LEGAL / COMPLIANCE / RESERVES','Price-volume hypothesis, capital allowances and uncertainties'],
+ inputs:['Complete CEO-01 BusinessContext','CEO-02 original Affairs & Risk Intake with VALUES, QUALITY, ODS and due diligence; six specialist contracts only when separately supplied','Risk register TAX / INSURANCE / LEGAL / COMPLIANCE / RESERVES','Price-volume hypothesis, capital allowances and uncertainties'],
  process:'Challenge and verify CEO market, product, price, volume and risk hypotheses',
  outputs:['Research brief and falsifiable market hypotheses','Evidence requests, customer demand and positioning questions','Price/volume viability decision and recommended modifications'],
  customers:['CEO-04 · Strategy Research','Later · Corporate Communication / UX','Later · Business Development & Innovation (MVP / P&L)']},
  source:{kind:p.kind,provenance:p.source,approval:p.approvalStatus,ceo02Approved:p.upstreamCEO02?.approval?.ceoApproved===true,sourceFilename01:state.sourceFiles?.ceo01?.name||'PENDING',sourceFilename02:state.sourceFiles?.ceo02?.name||'PENDING'},
  payload:{
   businessContext:p.businessContext,ceo01OriginalBusinessContext:deepcopy(state.upstreamCEO01||null),productPdpReference:p.productPdpSource,
-  reputationalIntake:deepcopy(state.upstreamCEO02?.originalPrimarySource||state.upstreamCEO02||null),fullReputationalSourcePackage:deepcopy(state.upstreamCEO02CompletePackage||null),
+  reputationalIntake:deepcopy(state.upstreamCEO02?.originalPrimarySource||state.upstreamCEO02||null),fullReputationalSourcePackage:deepcopy(state.upstreamCEO02CompletePackage||null),reputationalPrimarySourceIsSufficient:true,specialistContractsAreOptional:true,
   reputationSummary:{valuesActions:deepcopy(p.upstreamCEO02?.valuesActions||[]),qualityCommitments:deepcopy(p.upstreamCEO02?.qualityCommitments||{}),approval:deepcopy(p.upstreamCEO02?.approval||null),status:p.upstreamCEO02?.status||'PENDING'},
   originalSpecialistContracts:deepcopy(state.upstreamSpecialistContracts||[]),specialistContractManifest:specialistManifest(),
   productScope:p.businessContext,scenario:p.scenario,analysis:p.analysis,registeredTax:p.tax,registeredInsurance:p.insurance,registeredLegal:p.legal,registeredCompliance:p.compliance,registeredReserves:p.reserves,
-  productivity:prod,sourceEffortLedger:{status:'REFERENCE ONLY · NOT ENTERED AS CEO-03 COMPANY COSTS',rows:deepcopy(state.upstreamCEO02CompletePackage?.effortLedger||[])},financingWhatIf:p.financingAssumptions,financingStatus:'HYPOTHETICAL · NO BANK OFFER / APPROVED WACC',
+  productivity:prod,sourceEffortLedger:{status:'REFERENCE ONLY · NOT ENTERED AS CEO-03 COMPANY COSTS',rows:deepcopy(state.upstreamCEO02?.originalPrimarySource?.effortBarème||state.upstreamCEO02CompletePackage?.effortLedger||[])},financingWhatIf:p.financingAssumptions,financingStatus:'HYPOTHETICAL · NO BANK OFFER / APPROVED WACC',
   dueDiligence:deepcopy(p.dueDiligence||[]),sourceRegister:deepcopy(state.sourceFiles||{}),documentedUnknowns:deepcopy(p.analysis.unknownCostFlags||[]),
   futureEconomicRecipients:{cpo:'CPO · Procurement / Supplier SLA (separate contract)',strategyPlanning:'Strategy Planning (later planning evidence)',budget:'Goals / Budget C-Level (after financing / WACC)'}
  },
@@ -2512,7 +2522,7 @@ function buildResearchDataContract(){const p=handover(),prod=productivitySnapsho
  'Keep CPIO assurance and CHRO productivity governance as supplied; do not treat assumed productivity as savings'
  ],
  processSequence:['Affairs & Risk','Strategy Research','Corporate Communication / UX','Business Development & Innovation (MVP and P&L)','Strategy Planning','Financing negotiation and verified WACC','Goals / Budget C-Level'],
- statusNote:'Self-contained source-bearing draft. Missing files do not imply zero. No demand, MVP, P&L, actual WACC, approved C-Level budget or external financing is claimed.'
+ statusNote:'Self-contained source-bearing draft; the original CEO-02 Affairs & Risk Intake is sufficient without additional specialist contracts. Missing optional source contracts remain PENDING, not zero. No demand, MVP, P&L, actual WACC, approved C-Level budget or external financing is claimed.'
 };}
 function buildCpoDataContract(){const p=handover();const ip=(state.upstreamSpecialistContracts||[]).find(c=>c.contract==='IndustrialPropertyRequirements')||null;return {
  kind:'DocROI.AILink.DataContract',schemaVersion:'2.0-draft',contractId:'CEO03-CPO-SUPPLIER-SLA',contract:'AffairsRiskToProcurementSLA',
@@ -2525,6 +2535,8 @@ function buildCpoDataContract(){const p=handover();const ip=(state.upstreamSpeci
  payload:{businessContext:deepcopy(p.businessContext),sourceFiles:deepcopy(state.sourceFiles||{}),supplierRequirements:deepcopy(p.recipients.procurement.requirements),
   registeredTax:deepcopy(p.tax),insuranceCards:deepcopy(p.insurance),legalCards:deepcopy(p.legal),complianceCards:deepcopy(p.compliance),
   industrialPropertySourceContract:deepcopy(ip),industrialPropertyReceived:Boolean(ip),
+  industrialPropertyQuestionsFromPrimary:(state.upstreamCEO02?.valuesActions||[]).filter(a=>a.riskQuestions?.industrialProperty).map(a=>({actionId:a.actionId||'UNKNOWN',action:a.action||'',industrialProperty:a.riskQuestions.industrialProperty,evidenceStatus:a.evidenceStatus||'UNKNOWN'})),
+  industrialPropertyEvidenceStatus:ip?'SPECIALIST_CONTRACT_RECEIVED':'PRIMARY_INTAKE_QUESTIONS_ONLY_SPECIALIST_CONTRACT_NOT_SUPPLIED',
   productConstraints:deepcopy(p.productPdpSource?.terms||null),reputationalEvidence:{valuesActions:deepcopy(p.upstreamCEO02?.valuesActions||[]),qualityCommitments:deepcopy(p.upstreamCEO02?.qualityCommitments||{})},
   dueDiligence:deepcopy(p.dueDiligence),openEconomicAllocations:'Supplier premiums and taxes are not automatically paid by our company'},
  approval:'PENDING · SUPPLIER HAS NOT ACCEPTED SLA OR CERTIFIED EVIDENCE',
@@ -2578,9 +2590,9 @@ function renderData(){const b=state.business,up=state.upstreamCEO02;
  <p><b>Financial conditions:</b> UNKNOWN · ODS or reputational evidence is not an automatic loan discount.</p>
  <p class="ar-mini">Potential negotiation benefits require identified activities, measurable evidence and a financier's documented conditions.</p></div>
  </div>
- <details class="ar-req-details"><summary>View the six original CEO-02 specialist contracts and productivity evidence</summary>${contractsPanel()}${productivityPanel('data')}</details>
+ <details class="ar-req-details"><summary>View CEO-02 specialist contracts (if supplied) and productivity evidence</summary>${contractsPanel()}${productivityPanel('data')}</details>
  <div class="ar-card ar-import-area"><div class="ar-data-title">Two upstream files · one clear route</div>
- <p class="ar-mini">A standard user can import the two JSON downloads shown below, in either order. Each file adds its own evidence; it does not erase the other source. These are local files, not automatic API connections. Both originals are necessary for a complete traceable Research handover; manual work is still a clearly incomplete draft.</p>
+ <p class="ar-mini">A standard user can import the two JSON downloads shown below, in either order. Each file adds its own evidence; it does not erase the other source. These are local files, not automatic API connections. CEO-01 BusinessContext and the CEO-02 Affairs &amp; Risk Intake are the two canonical sources for a traceable draft Research handover. Six specialist contracts are optional additional evidence, not an import prerequisite. Missing documentation is marked PENDING, never invented.</p>
  <div class="ar-import-steps">
  <div class="ar-import-step"><div class="ar-import-step-head"><b>01 · Business Identification</b><span class="ar-import-indicator ${state.sourceFiles?.ceo01?'ok':''}">${state.sourceFiles?.ceo01?'RECEIVED':'MISSING · MANUAL DRAFT ALLOWED'}</span></div>
  <p class="ar-import-file">Required export: <code>Doc_ROI_CEO-00_&lt;Project&gt;_BusinessContext.json</code></p>
@@ -2588,10 +2600,10 @@ function renderData(){const b=state.business,up=state.upstreamCEO02;
  <div class="ar-import-actions"><label class="ar-button ar-fill">Choose CEO-01 file<input id="ar-ceo01-import" type="file" accept=".json,application/json" hidden></label><a class="ar-button ar-outline" href="https://doc-roi-ai-link-ceo-pmo-business-id.vercel.app/" target="_blank" rel="noopener noreferrer">Get file · CEO-01 ↗</a></div>
  <p class="ar-file-stamp">${state.sourceFiles?.ceo01?'Received: '+h(state.sourceFiles.ceo01.name)+' · '+h(state.sourceFiles.ceo01.status):'No CEO-01 file loaded yet. Manual work is possible, but Research handover remains INCOMPLETE.'}</p></div>
  <div class="ar-import-step"><div class="ar-import-step-head"><b>02 · Reputational Commitment</b><span class="ar-import-indicator ${state.sourceFiles?.ceo02?'ok':''}">${state.sourceFiles?.ceo02?'RECEIVED':'MISSING · MANUAL DRAFT ALLOWED'}</span></div>
- <p class="ar-import-file">Required export: <code>Doc_ROI_CEO02_Complete_Transfer_Package_DRAFT.json</code></p>
- <p class="ar-mini">Source: CEO-02 · C-Level Destiny → <b>Complete transfer package for Affairs & Risk</b>. Its single JSON includes the Affairs & Risk Intake, VALUES/QUALITY, productivity and all six specialist contracts, including IndustrialPropertyRequirements. Do not upload those sub-files separately.</p>
+ <p class="ar-import-file">Official CEO-02 intake: <code>Doc_ROI_CEO02_to_CEO03_Affairs_Risk_DRAFT.json</code></p>
+ <p class="ar-mini">Source: CEO-02 · C-Level Destiny → <b>Affairs &amp; Risk Intake JSON</b>. This direct output contains VALUES, QUALITY, productivity, due-diligence questions and the original effort reference. Also accepts a Complete Transfer Package, if available, with six additional specialist contracts. <b>Only the Intake JSON is needed for this card.</b></p>
  <div class="ar-import-actions"><label class="ar-button ar-fill">Choose CEO-02 file<input id="ar-ceo02-import" type="file" accept=".json,application/json" hidden></label><a class="ar-button ar-outline" href="https://doc-roi-ai-link-ceo-reputational-go.vercel.app/" target="_blank" rel="noopener noreferrer">Get file · CEO-02 ↗</a></div>
- <p class="ar-file-stamp">${state.sourceFiles?.ceo02?'Received: '+h(state.sourceFiles.ceo02.name)+' · '+h(state.sourceFiles.ceo02.status):'No CEO-02 file loaded yet. The Intake-only JSON is NOT sufficient; choose the complete transfer package.'}</p></div>
+ <p class="ar-file-stamp">${state.sourceFiles?.ceo02?'Received: '+h(state.sourceFiles.ceo02.name)+' · '+h(state.sourceFiles.ceo02.status):'No CEO-02 file loaded yet. Choose the Affairs & Risk Intake JSON exported by Reputational Commitment; the complete package also works.'}</p></div>
  </div>
  <details class="ar-req-details"><summary>Advanced: resume an existing CEO-03 JSON draft</summary><button class="ar-button ar-quiet" type="button" data-action="triggerImport">Import a saved Affairs & Risk scenario</button><p class="ar-mini">A saved CEO-03 draft is different from the two upstream source files. Use only to resume your previous local work.</p></details>
  ${state.productPdp?`<details class="ar-req-details"><summary>PDP evidence received · ${state.productPdp.claims?.length||0} claims · ${state.productPdp.media?.length||0} media</summary><div class="ar-card"><p class="ar-mini">Source product reference: ${h(state.productPdp.name)} · ${h(state.productPdp.variant?.quantity||'UNKNOWN')} · PVP on PDP ${fmt(state.business.pdpGrossPrice)}; this is not the CEO scenario price. Stock ${h(state.productPdp.stock?.quantity??'UNKNOWN')} is not demand.</p><p class="ar-mini">Status: ${h(state.productPdp.sourceStatus)} · check packaging, rights, labels and supplier declarations before legal reliance.</p></div></details>`:''}
@@ -2699,10 +2711,10 @@ function resultsTable(e){if(!e.provided)return note('Set annual units and final 
 }
 function recipientOverviewCards(mode='insights'){
  const ready=intakeReadiness(),e=econ();
- const flag=ready.demoSelfContained?'BUNDLED EDUCATIONAL EXAMPLE · NOT VERIFIED':ready.completeForDraftHandover?'SOURCE INPUTS RECEIVED · DRAFT':'INCOMPLETE INPUTS · DRAFT';
- const common=`<p class="ar-mini"><b>Source readiness:</b> ${h(flag)}. ${h(ready.demoSelfContained?'Simulated upstream CEO-01 and CEO-02 sources, not real file imports.':ready.pending.join(' · ')||'Both upstream files and six CEO-02 contracts are present; approvals remain PENDING.')}</p>`;
+ const flag=ready.demoSelfContained?'BUNDLED EDUCATIONAL EXAMPLE · NOT VERIFIED':ready.completeForDraftHandover?'TWO CANONICAL SOURCE FILES RECEIVED · DRAFT':'INCOMPLETE INPUTS · DRAFT';
+ const common=`<p class="ar-mini"><b>Source readiness:</b> ${h(flag)}. ${h(ready.demoSelfContained?'Simulated upstream CEO-01 and CEO-02 sources, not real file imports.':ready.pending.join(' · ')||(ready.sixContractsReceived?'Both upstream files and six optional specialist contracts were received; approvals remain PENDING.':'Both canonical upstream files received. Specialist contracts were not required; any not supplied remain PENDING.'))}</p>`;
  const items=[
-  {num:'01',title:'Strategy Research',to:'CEO-04 · Strategy Research',tag:'NEXT · PRIMARY',scope:'CEO-01 BusinessContext + CEO-02 VALUES, QUALITY, ODS and full specialist source contracts + CEO-03 five risk families, price, volume, productivity, WACC hypotheses and open research questions.',btn:'exportStrategyContract',download:'Download Research contract · JSON',sub:'Research must test market, demand, price, volume and positioning; may return a revised CEO hypothesis.'},
+  {num:'01',title:'Strategy Research',to:'CEO-04 · Strategy Research',tag:'NEXT · PRIMARY',scope:'CEO-01 BusinessContext + CEO-02 original Affairs & Risk Intake (VALUES, QUALITY, ODS, productivity, due diligence) + optional specialist contracts if available + CEO-03 risk families, price, volume and financing hypotheses.',btn:'exportStrategyContract',download:'Download Research contract · JSON',sub:'Research must test market, demand, price, volume and positioning; may return a revised CEO hypothesis.'},
   {num:'02',title:'Procurement / Supplier SLA',to:'CPO · Procurement',tag:'SPECIALIST · PARALLEL',scope:'Supplier-side tax, insurance, IP, claims, legal and compliance evidence; conditions are not binding until CPO negotiates and accepts an SLA.',btn:'exportCpoContract',download:'Download CPO contract · JSON',sub:'CPO owns procurement and supplier SLAs; no separate invented SLA department.'},
   {num:'03',title:'Financial Planning Evidence',to:'Strategy Planning',tag:'LATER · NOT A BUDGET',scope:'Costs by annual / unit / one-off basis, tax treatment, insurance, legal, compliance, liquidity and contingent reserves, hypothetical financing and unknowns.',btn:'exportStrategyPlanning',download:'Download Strategy Planning evidence · JSON',sub:'Preserved for Strategy Planning after MVP/P&L. Goals / Budget C-Level follows financing negotiation and verified WACC.'}
  ];
@@ -2790,7 +2802,7 @@ function exportAllZip(){const prior=captureExports;captureExports=[];try{
  [exportJson,exportCsv,exportCpo,exportSourceRegister,exportResearch,exportFinancing,exportExecutive,exportStrategyContract,exportCpoContract,exportStrategyPlanning,exportSpecialists,exportProductivity].forEach(fn=>fn());
  const gathered=captureExports;
  for(const record of state.upstreamSpecialistContracts||[]){gathered.push({name:'specialist_contracts/'+slug(record.contract||'UNKNOWN')+'_SOURCE_DRAFT.json',text:JSON.stringify(record,null,2),mime:'application/json'});}
- gathered.push({name:'00_README_SOURCE_AND_DELIVERY_STATUS.txt',text:'Doc ROI · AI·Link CEO-03 · Affairs & Risk v08\nLOCAL DRAFT — NOT APPROVED / NOT DELIVERED\nData Sources: CEO-01, CEO-02 source contracts (six original recipients preserved).\nInformation: TAX/INSURANCE/LEGAL/COMPLIANCE/RESERVES.\nIntelligence: price, units, capital and risk WHAT-IF — not P&L/WACC approved.\nInsights: unresolved assumptions, PRODUCTIVITY IQ objective and no productivity cost saving claimed.\nC-Level Destiny: Strategy Research immediate; CPO / Procurement SLA specialist parallel; Strategy Planning evidence preserved for later, NOT budget. Six source contracts retained with CPIO name normalization.\nA missing original contract is not fabricated.\nNo API is connected; download is local.\n',mime:'text/plain'});
+ gathered.push({name:'00_README_SOURCE_AND_DELIVERY_STATUS.txt',text:'Doc ROI · AI·Link CEO-03 · Affairs & Risk v09\nLOCAL DRAFT — NOT APPROVED / NOT DELIVERED\nData Sources: CEO-01 BusinessContext + original CEO-02 Affairs & Risk Intake. Six specialist contracts OPTIONAL when supplied; unprovided contracts remain PENDING.\nInformation: TAX/INSURANCE/LEGAL/COMPLIANCE/RESERVES.\nIntelligence: price, units, capital and risk WHAT-IF — not P&L/WACC approved.\nInsights: unresolved assumptions, PRODUCTIVITY IQ objective and no productivity cost saving claimed.\nC-Level Destiny: Strategy Research immediate; CPO / Procurement SLA specialist parallel; Strategy Planning evidence preserved for later, NOT budget. Six source contracts retained with CPIO name normalization.\nA missing original contract is not fabricated.\nNo API is connected; download is local.\n',mime:'text/plain'});
  const blob=zipBytes(gathered);const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='Doc_ROI_CEO03_Complete_Research_CPO_Strategy_Planning_Handover_DRAFT.zip';document.body.append(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(url)},1000);
  }finally{captureExports=prior;}}
 
@@ -2886,26 +2898,62 @@ function applyBusinessContext(doc,filename){
  return 'CEO-01 BusinessContext imported. The original source, provenance and validation are preserved. CEO-02 may now be added independently.'+warning;
 }
 function applyReputationalContext(doc,filename){
- if(doc?.kind!=='DocROI.CEO02.TransferPackage'||!doc?.primary||!Array.isArray(doc?.sixSpecialistContracts))throw Error('The selected file is not the Complete Transfer Package. The standalone Intake and IndustrialProperty JSON are NOT sufficient. Please download "Doc_ROI_CEO02_Complete_Transfer_Package_DRAFT.json" from CEO-02.');
- const missing=CONTRACT_EXPECTED.map(x=>x[0]).filter(n=>!doc.sixSpecialistContracts.some(c=>c?.contract===n));
- if(missing.length)throw Error('The CEO-02 package is missing required specialist contracts: '+missing.join(', ')+'. Export the full package again.');
- const primary=doc.primary;
- if(!primary?.businessContext||!Array.isArray(primary.valuesActions)||!primary.qualityCommitments||typeof primary.qualityCommitments!=='object')throw Error('This is not the CEO-02 Affairs & Risk transfer. Export the Complete Transfer Package from Reputational Commitment.');
+ const isDirect=doc?.kind==='DocROI.CEO03.AffairsRiskIntake';
+ const isPackage=doc?.kind==='DocROI.CEO02.TransferPackage'&&doc.primary&&typeof doc.primary==='object';
+ if(!isDirect&&!isPackage){
+  throw Error('Not a CEO-02 Affairs & Risk Intake. Download the Affairs & Risk Intake JSON from Reputational Commitment (CEO-02); the Complete Transfer Package is also supported.');
+ }
+ const primary=isDirect?doc:doc.primary;
+ if(!primary?.businessContext||typeof primary.businessContext!=='object'||
+    !Array.isArray(primary.valuesActions)||!primary.qualityCommitments||
+    typeof primary.qualityCommitments!=='object'||Array.isArray(primary.qualityCommitments)){
+  throw Error('The selected CEO-02 file is missing businessContext, valuesActions or qualityCommitments. Export the Affairs & Risk Intake JSON from CEO-02.');
+ }
+ const supplementary=isPackage&&Array.isArray(doc.sixSpecialistContracts)?deepcopy(doc.sixSpecialistContracts):[];
+ const missing=CONTRACT_EXPECTED.map(x=>x[0]).filter(n=>!supplementary.some(c=>c?.contract===n));
  const s=state.metadata.demo?empty():deepcopy(state);
- s.upstreamCEO02CompletePackage=deepcopy(doc);
+ s.upstreamCEO02CompletePackage=isPackage?deepcopy(doc):null;
+ s.upstreamSpecialistContracts=supplementary; // Do not accidentally retain stale contracts from a previous project.
  s.sourceFiles=s.sourceFiles||{ceo01:null,ceo02:null};
  const b=primary.businessContext;
- if(!s.upstreamCEO01){s.business.brand=b.project_name||s.business.brand;s.business.name=b.product_service_name||s.business.name;s.business.category=b.sector||s.business.category;s.business.origin=b.origin||s.business.origin;s.business.targetMarket=b.target_market||s.business.targetMarket;s.business.planningUnit=b.planning_unit||s.business.planningUnit;}
- const name1=(s.upstreamCEO01?.business_context?.project_name||'').trim().toLowerCase(),name2=(b.project_name||'').trim().toLowerCase();
- let warning='';if(name1&&name2&&name1!==name2)warning=' WARNING: CEO-01 and CEO-02 project names differ. Review identity and source suitability before exporting.';
- s.upstreamCEO02={kind:primary.kind||'DocROI.CEO03.AffairsRiskIntake',sourceKind:primary.kind||'UNKNOWN',approval:deepcopy(primary.approval||{ceoApproved:false}),status:primary.status||'DRAFT',supplier:primary.supplier||'CEO-02 · Reputational Commitment',businessContext:deepcopy(b),valuesActions:deepcopy(primary.valuesActions),qualityCommitments:deepcopy(primary.qualityCommitments),dueDiligenceRequired:deepcopy(primary.dueDiligenceRequired||[]),originalPrimarySource:deepcopy(primary)};
- s.upstreamSpecialistContracts=Array.isArray(doc.sixSpecialistContracts)?deepcopy(doc.sixSpecialistContracts):Array.isArray(doc.contracts)?deepcopy(doc.contracts):[];
+ if(!s.upstreamCEO01){
+  s.business.brand=b.project_name||s.business.brand;
+  s.business.name=b.product_service_name||s.business.name;
+  s.business.category=b.sector||s.business.category;
+  s.business.origin=b.origin||s.business.origin;
+  s.business.targetMarket=b.target_market||s.business.targetMarket;
+  s.business.planningUnit=b.planning_unit||s.business.planningUnit;
+ }
+ const name1=(s.upstreamCEO01?.business_context?.project_name||'').trim().toLowerCase();
+ const name2=(b.project_name||'').trim().toLowerCase();
+ let warning='';
+ if(name1&&name2&&name1!==name2)warning=' WARNING: CEO-01 and CEO-02 project names differ. Review identity before exporting; the mismatch is retained in the downstream readiness record.';
+ // Store the entire original primary document, including all actions, QUALITY, due diligence and the 76 effort rows.
+ s.upstreamCEO02={
+  kind:primary.kind,sourceKind:primary.kind,approval:deepcopy(primary.approval||{ceoApproved:false}),
+  status:primary.status||'DRAFT',supplier:primary.supplier||'CEO-02 · Reputational Commitment',
+  businessContext:deepcopy(b),valuesActions:deepcopy(primary.valuesActions),
+  qualityCommitments:deepcopy(primary.qualityCommitments),
+  dueDiligenceRequired:deepcopy(primary.dueDiligenceRequired||[]),
+  originalPrimarySource:deepcopy(primary),originalPrimaryDocumentType:'DocROI.CEO03.AffairsRiskIntake'
+ };
  s.dueDiligence=deepcopy(primary.dueDiligenceRequired||[]);
- s.sourceFiles.ceo02={organizationalTerminologyNormalized:'CPIO',name:filename,status:primary.status||'DRAFT',kind:doc.kind||'UNKNOWN',sourceContractCount:s.upstreamSpecialistContracts.length,receivedAt:new Date().toISOString()};
- s.metadata.demo=false;s.metadata.importedFrom=((s.metadata.importedFrom||'')+' + CEO-02 '+filename).trim();s.metadata.sourceType='UPSTREAM_DRAFT';
+ s.sourceFiles.ceo02={organizationalTerminologyNormalized:'CPIO',name:filename,
+  status:primary.status||'DRAFT',kind:primary.kind,containerKind:doc.kind,
+  transferMode:isDirect?'AFFAIRS_RISK_INTAKE_DIRECT':'COMPLETE_TRANSFER_PACKAGE',
+  sourceContractCount:supplementary.length,
+  specialistContractsOptional:true,
+  missingSpecialistContracts:missing,receivedAt:new Date().toISOString()};
+ s.metadata.demo=false;
+ s.metadata.importedFrom=((s.metadata.importedFrom||'')+' + CEO-02 '+filename).trim();
+ s.metadata.sourceType='UPSTREAM_DRAFT';
  state=s;
- return 'CEO-02 Complete Transfer Package imported: VALUES, QUALITY, productivity and '+s.upstreamSpecialistContracts.length+' specialist contracts.'+warning;
+ const mode=isDirect?'original Affairs & Risk Intake':'Complete Transfer Package';
+ return 'CEO-02 '+mode+' imported successfully. '+s.upstreamCEO02.valuesActions.length+
+  ' VALUES actions, QUALITY / productivity, due diligence and original effort reference retained. '+
+  (isDirect?'Specialist contracts were not supplied and are OPTIONAL (PENDING), not required to continue.':supplementary.length+' specialist contracts added; missing contracts remain PENDING.')+warning;
 }
+
 async function receiveUpstreamFile(file,which){
  if(file.size>8_000_000)throw Error('Source file exceeds the 8 MB limit.');
  const obj=normalizeGovernanceNames(JSON.parse(await file.text()));
